@@ -1276,9 +1276,9 @@ function renderClientes() {
 // ============================================================
 // CLIENTE DETAIL
 // ============================================================
-function openClienteDetail(id) {
+function openClienteDetail(id, tab) {
   currentClienteId = id;
-  currentClienteTab = 'info';
+  currentClienteTab = tab || 'info';
   goPage('cliente-detail', null);
 }
 
@@ -1777,32 +1777,37 @@ function renderObrigAvulsas() {
 }
 
 function renderObrigacoes() {
-  refreshObrigStatus();
   const hoje = new Date();
-  const mesAtual = hoje.getMonth();
-  const anoAtual = hoje.getFullYear();
-  const mesNome = MESES[mesAtual] + '/' + anoAtual;
+  const mesRef = MESES[hoje.getMonth()] + '/' + hoje.getFullYear();
+  const diaHoje = hoje.getDate();
 
-  // Obrigações mensais recorrentes (impostos custom)
-  const mensais = gerarObrigacoesMensais();
-  const atrasadas = mensais.filter(o => o.status==='Atrasado');
-  const proximas  = mensais.filter(o => o.status==='Próximo');
-  const emDia     = mensais.filter(o => o.status==='Em dia');
-  const entregues = mensais.filter(o => o.status==='Entregue');
+  const ativos = DB.clientes.filter(c => c.status === 'Ativo').sort((a,b) => a.nome.localeCompare(b.nome));
+  const totalEsp = ativos.reduce((s,c) => s + c.honorario, 0);
+
+  const linhas = ativos.map(c => {
+    const pago = DB.pagamentos.find(p => p.clienteId===c.id && p.ref===mesRef && p.forma !== 'Em Aberto');
+    const atrasado = !pago && diaHoje > c.vencimento;
+    return { c, pago, atrasado };
+  });
+
+  const atrasados  = linhas.filter(l => l.atrasado);
+  const pendentes  = linhas.filter(l => !l.pago && !l.atrasado);
+  const confirmados = linhas.filter(l => l.pago);
+  const recebido = confirmados.reduce((s,l) => s + l.c.honorario, 0);
+  const prog = totalEsp > 0 ? Math.round((recebido/totalEsp)*100) : 0;
 
   const tbl = (list) => `<div class="table-wrap"><table>
-    <thead><tr><th>Cliente</th><th>Tipo</th><th>Obrigação</th><th>Entrega ${mesNome}</th><th>Status</th><th>Ação</th></tr></thead>
-    <tbody>${list.map(o => {
-      const c = DB.clientes.find(x => x.id===o.clienteId);
-      const dia = o.diaEmissao || '—';
-      const cls = o.status==='Entregue'?'badge-green':o.status==='Atrasado'?'badge-red':o.status==='Próximo'?'badge-yellow':'badge-blue';
+    <thead><tr><th>Cliente</th><th>Tipo</th><th>Honorário</th><th>Vencimento</th><th>Situação</th><th>Ação</th></tr></thead>
+    <tbody>${list.map(({c,pago,atrasado}) => {
+      const cls = pago?'badge-green':atrasado?'badge-red':'badge-yellow';
+      const st = pago?'Pago':atrasado?'Atrasado':'Pendente';
       return `<tr>
-        <td class="td-main" style="cursor:pointer" onclick="openClienteDetail('${o.clienteId}')">${c?c.nome:'?'}</td>
-        <td>${c?`<span class="badge ${TIPOS_CLASS[c.tipo]}">${c.tipo}</span>`:''}</td>
-        <td><strong>${o.nome}</strong> <span class="badge badge-purple" style="font-size:10px">Custom</span></td>
-        <td>Dia ${dia}</td>
-        <td><span class="badge ${cls}">${o.status}</span></td>
-        <td><button class="btn btn-sm ${o.status==='Entregue'?'btn-secondary':'btn-success'}" onclick="toggleImpostoCustom('${o.id}')">${o.status==='Entregue'?'Desfazer':'✓ Entregar'}</button></td>
+        <td class="td-main" style="cursor:pointer" onclick="openClienteDetail('${c.id}','honorarios')">${c.nome}</td>
+        <td><span class="badge ${TIPOS_CLASS[c.tipo]}">${c.tipo}</span></td>
+        <td style="font-weight:600;color:var(--green)">R$ ${c.honorario.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+        <td>Dia ${c.vencimento}</td>
+        <td><span class="badge ${cls}">${st}</span>${pago?`<div style="font-size:11px;color:var(--text3);margin-top:3px">Pago em ${new Date(pago.data+'T12:00').toLocaleDateString('pt-BR')}</div>`:''}</td>
+        <td>${pago?`<button class="btn btn-secondary btn-sm" onclick="excluirPagamento('${pago.id}')">↺ Pendente</button>`:`<button class="btn btn-success btn-sm" onclick="openPagamento('${c.id}')">✓ Pago</button>`}</td>
       </tr>`;
     }).join('')}</tbody></table></div>`;
 
@@ -1813,67 +1818,51 @@ function renderObrigacoes() {
     </div>` : '';
 
   return `
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-    <div style="font-size:20px;font-weight:700">Obrigações Fiscais</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:20px;font-weight:700">Obrigações</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:2px">Referência: <strong>${mesRef}</strong> — confirme o pagamento de honorários de cada cliente ativo</div>
+    </div>
     <button class="btn btn-primary btn-sm" onclick="openObrigAvulsa()">+ Nova Obrigação</button>
   </div>
-  <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Mês atual: <strong>${mesNome}</strong> — Impostos recorrentes de todos os clientes ativos</div>
-  <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
-    <div class="stat-card red"><div class="stat-icon red">⚠️</div><div class="stat-value">${atrasadas.length}</div><div class="stat-label">Atrasadas</div></div>
-    <div class="stat-card yellow"><div class="stat-icon yellow">⏰</div><div class="stat-value">${proximas.length}</div><div class="stat-label">Vencendo em breve</div></div>
-    <div class="stat-card blue"><div class="stat-icon blue">📋</div><div class="stat-value">${emDia.length}</div><div class="stat-label">Em dia</div></div>
-    <div class="stat-card green"><div class="stat-icon green">✓</div><div class="stat-value">${entregues.length}</div><div class="stat-label">Entregues</div></div>
+  <div class="stats-grid">
+    <div class="stat-card blue"><div class="stat-icon blue">💼</div><div class="stat-value" style="font-size:18px">R$ ${totalEsp.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div><div class="stat-label">Total do mês</div></div>
+    <div class="stat-card green"><div class="stat-icon green">✓</div><div class="stat-value" style="font-size:18px">R$ ${recebido.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div><div class="stat-label">Confirmado</div></div>
+    <div class="stat-card red"><div class="stat-icon red">⚠️</div><div class="stat-value">${atrasados.length}</div><div class="stat-label">Atrasados</div></div>
+    <div class="stat-card teal"><div class="stat-icon teal">📊</div><div class="stat-value">${prog}%</div><div class="stat-label">% Confirmado<div class="progress-bar"><div class="progress-fill" style="width:${prog}%;background:var(--teal)"></div></div></div></div>
   </div>
   ${renderObrigAvulsas()}
-  ${sec('🔴 Atrasadas', atrasadas, 'badge-red')}
-  ${sec('🟡 Vencendo em breve', proximas, 'badge-yellow')}
-  ${sec('🔵 Em dia', emDia, 'badge-blue')}
-  ${sec('✅ Entregues este mês', entregues, 'badge-green')}
-  ${!mensais.length ? '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Nenhum imposto cadastrado nos clientes ativos</div></div>' : ''}`;
+  ${sec('🔴 Atrasados', atrasados, 'badge-red')}
+  ${sec('🟡 Pendentes', pendentes, 'badge-yellow')}
+  ${sec('✅ Pagos este mês', confirmados, 'badge-green')}
+  ${!ativos.length ? '<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">Nenhum cliente ativo cadastrado</div></div>' : ''}`;
 }
 
 // ============================================================
 // HONORÁRIOS
 // ============================================================
 function renderHonorarios() {
-  const ativos = DB.clientes.filter(c => c.status==='Ativo');
-  const totalEsp = ativos.reduce((s,c) => s+c.honorario, 0);
-  const mesRef = MESES[new Date().getMonth()]+'/'+new Date().getFullYear();
-  const pgMes = DB.pagamentos.filter(p => p.ref===mesRef);
-  const recebido = pgMes.reduce((s,p) => s+p.valor, 0);
-  const prog = totalEsp > 0 ? Math.round((recebido/totalEsp)*100) : 0;
+  const clientes = [...DB.clientes].sort((a,b) => a.nome.localeCompare(b.nome));
   return `
   <div style="font-size:20px;font-weight:700;margin-bottom:6px">Honorários</div>
-  <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Referência: ${mesRef}</div>
-  <div class="stats-grid">
-    <div class="stat-card blue"><div class="stat-icon blue">💼</div><div class="stat-value" style="font-size:18px">R$ ${totalEsp.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div><div class="stat-label">Total a receber</div></div>
-    <div class="stat-card green"><div class="stat-icon green">✓</div><div class="stat-value" style="font-size:18px">R$ ${recebido.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div><div class="stat-label">Recebido</div></div>
-    <div class="stat-card yellow"><div class="stat-icon yellow">⏳</div><div class="stat-value" style="font-size:18px">R$ ${(totalEsp-recebido).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div><div class="stat-label">A receber</div></div>
-    <div class="stat-card teal"><div class="stat-icon teal">📊</div><div class="stat-value">${prog}%</div><div class="stat-label">% Recebido<div class="progress-bar"><div class="progress-fill" style="width:${prog}%;background:var(--teal)"></div></div></div></div>
-  </div>
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-header"><div class="card-title">Situação — ${mesRef}</div></div>
-    <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Tipo</th><th>Honorário</th><th>Vencimento</th><th>Situação</th><th>Ação</th></tr></thead><tbody>
-    ${ativos.map(c=>{
-      const pago=DB.pagamentos.find(p=>p.clienteId===c.id&&p.ref===mesRef);
-      const atrasado=!pago&&new Date().getDate()>c.vencimento;
-      const cls=pago?'badge-green':atrasado?'badge-red':'badge-yellow';
-      const st=pago?'Pago':atrasado?'Atrasado':'Pendente';
-      return `<tr><td class="td-main" style="cursor:pointer" onclick="openClienteDetail('${c.id}')">${c.nome}</td>
-      <td><span class="badge ${TIPOS_CLASS[c.tipo]}">${c.tipo}</span></td>
-      <td style="font-weight:600;color:var(--green)">R$ ${c.honorario.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-      <td>Dia ${c.vencimento}</td>
-      <td><span class="badge ${cls}">${st}</span>${pago?`<div style="font-size:11px;color:var(--text3);margin-top:3px">Pago em ${new Date(pago.data+'T12:00').toLocaleDateString('pt-BR')}</div>`:''}</td>
-      <td>${pago?`<button class="btn btn-danger btn-sm" onclick="excluirPagamento('${pago.id}')">Estornar</button>`:`<button class="btn btn-success btn-sm" onclick="openPagamento('${c.id}')">Registrar</button>`}</td></tr>`;
-    }).join('')}</tbody></table></div>
-  </div>
+  <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Clique em um cliente para ver o histórico de pagamentos</div>
   <div class="card">
-    <div class="card-header"><div class="card-title">Histórico de Pagamentos</div></div>
-    <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Referência</th><th>Data</th><th>Valor</th><th>Forma</th><th></th></tr></thead><tbody>
-    ${[...DB.pagamentos].sort((a,b)=>new Date(b.data)-new Date(a.data)).slice(0,20).map(p=>{
-      const c=DB.clientes.find(x=>x.id===p.clienteId);
-      return `<tr><td class="td-main">${c?c.nome:'?'}</td><td>${p.ref}</td><td>${new Date(p.data+'T12:00').toLocaleDateString('pt-BR')}</td><td style="font-weight:600;color:var(--green)">R$ ${p.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}${(p.saidas&&p.saidas.length)?`<br><span style="font-size:10px;color:var(--text3)">Rec: R$ ${(p.valorLiquido||(p.valor-p.saidas.reduce((s,x)=>s+x.valor,0))).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>`:''}</td><td><span class="badge badge-blue">${p.forma}</span></td><td style="display:flex;gap:4px"><button class="btn btn-secondary btn-sm" onclick="gerarRecibo('${p.id}','${p.clienteId}')" title="Gerar Recibo">🧾</button><button class="btn btn-danger btn-sm btn-icon" onclick="excluirPagamento('${p.id}')">🗑</button></td></tr>`;
-    }).join('')}</tbody></table></div>
+    <div class="card-body" style="padding:0">
+    ${clientes.length ? clientes.map(c => {
+      const pagamentos = DB.pagamentos.filter(p => p.clienteId===c.id);
+      const emAberto = pagamentos.filter(p => p.statusPagto==='atrasado' || p.forma==='Em Aberto').length;
+      const ultimo = [...pagamentos].filter(p=>p.forma!=='Em Aberto').sort((a,b)=>new Date(b.data)-new Date(a.data))[0];
+      return `<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer" onclick="openClienteDetail('${c.id}','honorarios')">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:14px;${c.status!=='Ativo'?'color:var(--text3)':''}">${c.nome}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">R$ ${(c.honorario||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}/mês · Venc. dia ${c.vencimento}${ultimo?` · Último pago: ${ultimo.ref}`:''}</div>
+        </div>
+        <span class="badge ${TIPOS_CLASS[c.tipo]}">${c.tipo}</span>
+        ${emAberto ? `<span class="badge badge-red">${emAberto} em aberto</span>` : ''}
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--text3);flex-shrink:0"><polyline points="9 18 15 12 9 6" stroke-width="2"/></svg>
+      </div>`;
+    }).join('') : '<div class="empty" style="padding:24px"><div class="empty-icon">👥</div><div class="empty-text">Nenhum cliente cadastrado</div></div>'}
+    </div>
   </div>`;
 }
 
@@ -3179,11 +3168,17 @@ function hideSearchResults() {
 
 function updateBadges() {
   refreshObrigStatus();
+  const hoje = new Date();
+  const mesRef = MESES[hoje.getMonth()]+'/'+hoje.getFullYear();
+  const ativos = DB.clientes.filter(c => c.status==='Ativo');
+  const nObrig = ativos.filter(c => {
+    const pago = DB.pagamentos.find(p => p.clienteId===c.id && p.ref===mesRef && p.forma !== 'Em Aberto');
+    return !pago && hoje.getDate() > c.vencimento;
+  }).length;
   const allObrig = [
     ...DB.obrigacoes,
     ...DB.impostosCustom.map(i => ({...i, status: calcObrigStatus(i)}))
   ];
-  const nObrig = allObrig.filter(o => !o.entregue && (o.status==='Atrasado'||o.status==='Próximo')).length;
   const nAlert = allObrig.filter(o => !o.entregue && o.status==='Atrasado').length;
   const bo = document.getElementById('badge-obrig');
   const ba = document.getElementById('badge-alertas');
