@@ -1171,7 +1171,7 @@ function goPage(page, navEl) {
   if (navEl) {
     navEl.classList.add('active');
   } else {
-    const map = {dashboard:0,clientes:1,obrigacoes:2,'cobranca-honorarios':2,'cobranca-xml':2,honorarios:3,'acesso-rapido':4,certidoes:5,alertas:6,relatorios:7};
+    const map = {dashboard:0,clientes:1,obrigacoes:2,'cobranca-honorarios':2,'cobranca-xml':2,honorarios:3,'acesso-rapido':4,'emissao-nota':4,certidoes:5,alertas:6,relatorios:7};
     const btns = document.querySelectorAll('.nav-btn');
     if (btns[map[page]]) btns[map[page]].classList.add('active');
   }
@@ -1192,6 +1192,7 @@ async function renderPage(page) {
     case 'cobranca-xml':        div.innerHTML = renderCobrancaXml(); break;
     case 'honorarios':      div.innerHTML = renderHonorarios(); break;
     case 'acesso-rapido':   div.innerHTML = renderAcessoRapido(); break;
+    case 'emissao-nota':    div.innerHTML = renderEmissaoNota(); break;
     case 'certidoes':       div.innerHTML = renderCertidoes(); break;
     case 'alertas':         div.innerHTML = renderAlertas(); break;
     case 'minha-empresa': div.innerHTML = await renderMinhaEmpresa(); break;
@@ -2142,26 +2143,36 @@ function renderHonorarios() {
 // ACESSO RAPIDO
 // ============================================================
 function renderAcessoRapido() {
-  const links = [
-    {label:'Emitir DAS do MEI',sub:'Portal do Empreendedor',icon:'🟢',q:'emitir DAS MEI portal empreendedor',color:'var(--green-bg)'},
-    {label:'e-CAC',sub:'Centro Virtual de Atendimento',icon:'🔵',q:'ecac receita federal acesso',color:'var(--accent-glow)'},
-    {label:'FGTS',sub:'FGTS Digital - Caixa Econômica',icon:'🟡',q:'FGTS digital caixa login',color:'var(--yellow-bg)'},
-    {label:'Simples Nacional',sub:'Portal do Simples Nacional',icon:'🟣',q:'simples nacional pgdas receita federal',color:'var(--purple-bg)'},
-  ];
   return `
   <div style="font-size:20px;font-weight:700;margin-bottom:6px">Acesso Rápido</div>
-  <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Atalhos para os portais mais utilizados. Clique para abrir no Google.</div>
+  <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Atalhos para os portais mais utilizados.</div>
   <div class="acesso-grid">
-    ${links.map(l=>`<a href="https://www.google.com/search?q=${encodeURIComponent(l.q)}" target="_blank" class="acesso-btn" style="background:${l.color};border-color:transparent">
+    <div class="acesso-btn" style="background:var(--green-bg);border-color:transparent;cursor:pointer" onclick="goPage('emissao-nota', null)">
+      <div class="acesso-icon">🧾</div>
+      <div><div class="acesso-label">Emissão de Nota</div><div class="acesso-sub">Portal do Contribuinte, NFS-e e Sebrae</div></div>
+      <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-left:auto;flex-shrink:0;color:var(--text3)"><polyline points="9 18 15 12 9 6" stroke-width="2"/></svg>
+    </div>
+  </div>`;
+}
+
+function renderEmissaoNota() {
+  const links = [
+    {label:'Nota no Portal do Contribuinte',sub:'SEFIN-RO · DET',icon:'🟢',url:'https://sitafe-sso.sefin.ro.gov.br/acesso_externo/login?request_url=https://det.sefin.ro.gov.br/&login_template=default&nivel_confiabilidade=conta_basica%20(bronze)',color:'var(--green-bg)'},
+    {label:'Nota de Serviço NFS',sub:'Emissor Nacional NFS-e',icon:'🔵',url:'https://www.nfse.gov.br/EmissorNacional/Login?ReturnUrl=%2fEmissorNacional',color:'var(--accent-glow)'},
+    {label:'Nota no Sebrae',sub:'Emissor NFE Sebrae (AMEI)',icon:'🟣',url:'https://amei.sebrae.com.br/auth/realms/externo/protocol/openid-connect/auth?client_id=emissor-nfe-frontend&redirect_uri=https%3A%2F%2Femissornfe.sebrae.com.br%2F&state=251c562b-5d5a-4b59-88b2-3af55a7c972a&response_mode=fragment&response_type=code&scope=openid&nonce=b6780053-a945-43f2-847a-28f11f93752c',color:'var(--purple-bg)'},
+  ];
+  return `
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="btn btn-secondary btn-sm" onclick="goPage('acesso-rapido', null)">← Voltar</button>
+    <div style="font-size:18px;font-weight:700">🧾 Emissão de Nota</div>
+  </div>
+  <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Clique para abrir o portal oficial em uma nova aba.</div>
+  <div class="acesso-grid">
+    ${links.map(l=>`<a href="${l.url}" target="_blank" class="acesso-btn" style="background:${l.color};border-color:transparent">
       <div class="acesso-icon">${l.icon}</div>
       <div><div class="acesso-label">${l.label}</div><div class="acesso-sub">${l.sub}</div></div>
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-left:auto;flex-shrink:0;color:var(--text3)"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" stroke-width="1.8"/><polyline points="15 3 21 3 21 9" stroke-width="1.8"/><line x1="10" y1="14" x2="21" y2="3" stroke-width="1.8"/></svg>
     </a>`).join('')}
-  </div>
-  <div class="card" style="margin-top:8px">
-    <div class="card-body">
-      <div style="font-size:13px;color:var(--text3);text-align:center">💡 Clique em qualquer botão para buscar o portal no Google e acessar o site oficial.</div>
-    </div>
   </div>`;
 }
 
