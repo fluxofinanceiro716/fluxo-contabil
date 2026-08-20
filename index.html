@@ -510,7 +510,7 @@ textarea.form-input{resize:vertical;min-height:80px;}
           <select id="f-tipo" class="form-input">
             <option value="">Selecione...</option>
             <option value="MEI">MEI</option>
-            <option value="SN">Simples Nacional</option>
+            <option value="SN">ME</option>
             <option value="LP">Lucro Presumido</option>
             <option value="Igreja">Igreja</option>
             <option value="Associação">Associação</option>
@@ -812,7 +812,7 @@ textarea.form-input{resize:vertical;min-height:80px;}
 // ============================================================
 // CONSTANTS
 // ============================================================
-const TIPOS_LABEL = {MEI:'MEI',SN:'Simples Nacional',LP:'Lucro Presumido',Igreja:'Igreja',Associação:'Associação',PF:'Pessoa Física'};
+const TIPOS_LABEL = {MEI:'MEI',SN:'ME',LP:'Lucro Presumido',Igreja:'Igreja',Associação:'Associação',PF:'Pessoa Física'};
 const TIPOS_CLASS = {MEI:'tipo-mei badge',SN:'tipo-sn badge',LP:'tipo-lp badge',Igreja:'tipo-igreja badge',Associação:'tipo-assoc badge',PF:'tipo-pf badge'};
 const OBRIGACOES_POR_TIPO = {
   MEI:[{nome:'DAS',dia:20},{nome:'DASN-SIMEI',dia:31,mesFixo:'Maio'}],
@@ -1426,61 +1426,27 @@ function renderDetalheFuncionarios(c, funcs) {
 }
 
 function renderDetalheImpostos(c, impostos) {
-  const hoje = new Date(); hoje.setHours(0,0,0,0);
-  const mesAtual = hoje.getMonth();
-  const anoAtual = hoje.getFullYear();
-
   return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-    <div><div style="font-size:14px;font-weight:600">Impostos Personalizados</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Cadastre uma vez e fica salvo permanentemente</div></div>
+    <div><div style="font-size:14px;font-weight:600">Impostos Cadastrados</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Cadastre uma vez e fica salvo permanentemente — o controle de entrega mensal fica em Obrigações → Entregar Impostos</div></div>
     <button class="btn btn-primary btn-sm" onclick="openModalImposto('${c.id}',null)">+ Adicionar Imposto</button>
   </div>
   ${impostos.length ? impostos.map(i => {
-    // Verifica se foi entregue no mês atual
-    const jaEntregueNesteMes = i.entregue && i.dataEntrega && (() => {
-      const d = new Date(i.dataEntrega + 'T12:00');
-      return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
-    })();
-
-    // Calcula datas para o mês atual
     const diaEmissao = i.diaEmissao || null;
-    const diaEntrega = i.dataEntrega ? new Date(i.dataEntrega+'T12:00').getDate() : null;
-    const diaVenc = i.dataVencimento ? new Date(i.dataVencimento+'T12:00').getDate() : null;
-
-    // Data de entrega do mês atual
-    const dataEntregaMesAtual = diaEntrega ? new Date(anoAtual, mesAtual, diaEntrega) : null;
-
-    // Status para o mês atual
-    let status, badgeCls;
-    if (jaEntregueNesteMes) {
-      status = 'Entregue'; badgeCls = 'badge-green';
-    } else if (dataEntregaMesAtual && hoje > dataEntregaMesAtual) {
-      status = 'Atrasado'; badgeCls = 'badge-red';
-    } else if (dataEntregaMesAtual) {
-      const diff = Math.floor((dataEntregaMesAtual - hoje) / 86400000);
-      status = diff <= 5 ? 'Próximo' : 'Pendente';
-      badgeCls = diff <= 5 ? 'badge-yellow' : 'badge-yellow';
-    } else {
-      status = 'Pendente'; badgeCls = 'badge-yellow';
-    }
+    const dataEntrega = i.dataEntrega ? new Date(i.dataEntrega+'T12:00') : null;
+    const dataVenc = i.dataVencimento ? new Date(i.dataVencimento+'T12:00') : null;
 
     return `<div class="imposto-card">
       <div class="imposto-header">
-        <div>
-          <div class="imposto-nome">${i.nome}</div>
-          ${status==='Atrasado'?'<span class="badge badge-red" style="margin-top:4px">Entrega Atrasada</span>':''}
-        </div>
+        <div class="imposto-nome">${i.nome}</div>
         <div style="display:flex;gap:6px;align-items:center">
-          <span class="badge ${badgeCls}">${status}</span>
-          <button class="btn btn-sm ${jaEntregueNesteMes?'btn-secondary':'btn-success'}" onclick="toggleImpostoCustom('${i.id}')">${jaEntregueNesteMes?'Desfazer':'✓ Entregar'}</button>
           <button class="btn btn-secondary btn-sm btn-icon" onclick="openModalImposto('${c.id}','${i.id}')">✏️</button>
           <button class="btn btn-danger btn-sm btn-icon" onclick="excluirImpostoCustom('${i.id}')">🗑</button>
         </div>
       </div>
       <div class="imposto-info">
         ${diaEmissao?`<span>📅 Emissão: dia ${diaEmissao}</span>`:''}
-        ${dataEntregaMesAtual?`<span>📬 Entrega: ${dataEntregaMesAtual.toLocaleDateString('pt-BR')}</span>`:''}
-        ${diaVenc?`<span>💳 Vencimento: ${new Date(anoAtual, mesAtual, diaVenc).toLocaleDateString('pt-BR')}</span>`:''}
-        ${jaEntregueNesteMes && i.valorImposto?`<span>💰 Valor: R$ ${parseFloat(i.valorImposto).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>`:''}
+        ${dataEntrega?`<span>📬 Entrega: ${dataEntrega.toLocaleDateString('pt-BR')}</span>`:''}
+        ${dataVenc?`<span>💳 Vencimento: ${dataVenc.toLocaleDateString('pt-BR')}</span>`:''}
         ${i.obs?`<span>📝 ${i.obs}</span>`:''}
       </div>
     </div>`;
