@@ -413,10 +413,6 @@ textarea.form-input{resize:vertical;min-height:80px;}
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-width="1.8"/></svg>
         Acesso Rápido
       </button>
-      <button class="nav-btn" onclick="goPage('certidoes',this)">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke-width="1.8"/><polyline points="14 2 14 8 20 8" stroke-width="1.8"/><line x1="16" y1="13" x2="8" y2="13" stroke-width="1.8"/><line x1="16" y1="17" x2="8" y2="17" stroke-width="1.8"/><polyline points="10 9 9 9 8 9" stroke-width="1.8"/></svg>
-        Emitir Certidão
-      </button>
     </div>
     <div class="nav-section">
       <div class="nav-section-label">Relatórios</div>
@@ -522,6 +518,14 @@ textarea.form-input{resize:vertical;min-height:80px;}
           </select>
         </div>
         <div class="form-group"><label class="form-label">Responsável</label><input id="f-responsavel" class="form-input" placeholder="Nome do responsável"></div>
+        <div class="form-group"><label class="form-label">Atuação</label>
+          <select id="f-atuacao" class="form-input">
+            <option value="">Selecione...</option>
+            <option value="servicos">Presta serviços</option>
+            <option value="produtos">Vende produtos</option>
+            <option value="ambos">Serviços e produtos</option>
+          </select>
+        </div>
         <div class="form-group"><label class="form-label">Telefone / WhatsApp</label><input id="f-telefone" class="form-input" placeholder="(00) 00000-0000"></div>
         <div class="form-group"><label class="form-label">Email</label><input id="f-email" class="form-input" type="email" placeholder="email@empresa.com"></div>
         <div class="form-group form-full"><label class="form-label">Endereço</label><input id="f-endereco" class="form-input" placeholder="Rua, número, bairro, cidade"></div>
@@ -1171,7 +1175,7 @@ function goPage(page, navEl) {
   if (navEl) {
     navEl.classList.add('active');
   } else {
-    const map = {dashboard:0,clientes:1,obrigacoes:2,'cobranca-honorarios':2,'cobranca-xml':2,honorarios:3,'acesso-rapido':4,'emissao-nota':4,certidoes:5,alertas:6,relatorios:7};
+    const map = {dashboard:0,clientes:1,obrigacoes:2,'cobranca-honorarios':2,'cobranca-xml':2,honorarios:3,'acesso-rapido':4,'emissao-nota':4,alertas:5,relatorios:6};
     const btns = document.querySelectorAll('.nav-btn');
     if (btns[map[page]]) btns[map[page]].classList.add('active');
   }
@@ -1193,7 +1197,6 @@ async function renderPage(page) {
     case 'honorarios':      div.innerHTML = renderHonorarios(); break;
     case 'acesso-rapido':   div.innerHTML = renderAcessoRapido(); break;
     case 'emissao-nota':    div.innerHTML = renderEmissaoNota(); break;
-    case 'certidoes':       div.innerHTML = renderCertidoes(); break;
     case 'alertas':         div.innerHTML = renderAlertas(); break;
     case 'minha-empresa': div.innerHTML = await renderMinhaEmpresa(); break;
     case 'relatorios':      div.innerHTML = renderRelatorios(); break;
@@ -1370,11 +1373,18 @@ function renderDetalheInfo(c) {
     <div class="card"><div class="card-body">
       <div class="section-title">Dados Cadastrais</div>
       ${fld('CNPJ/CPF',c.doc,true)} ${fld('Responsável',c.responsavel)} ${fld('Início',c.inicio?new Date(c.inicio+'T12:00').toLocaleDateString('pt-BR'):'')} ${fld('Status',`<span class="badge ${c.status==='Ativo'?'badge-green':'badge-gray'}">${c.status}</span>`)}
+      ${fld('Atuação',c.atuacao?{'servicos':'🛠️ Presta serviços','produtos':'📦 Vende produtos','ambos':'🛠️📦 Serviços e produtos'}[c.atuacao]||'—':'—')}
       <div style="margin-top:12px"><div class="section-title">Observações</div><div style="font-size:13px;color:var(--text2);line-height:1.6">${c.obs||'—'}</div></div>
     </div></div>
     <div class="card"><div class="card-body">
       <div class="section-title">Contato</div>
-      ${fld('Telefone',c.telefone?`<a class="wa-link" href="https://wa.me/55${c.telefone.replace(/\D/g,'')}" target="_blank">📱 ${c.telefone}</a>`:'—')}
+      ${fld('Telefone',c.telefone?`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span>${c.telefone}</span>
+        <a href="https://wa.me/55${c.telefone.replace(/\D/g,'')}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:white;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12.004 2C6.476 2 2 6.476 2 12.004c0 1.95.529 3.772 1.442 5.337L2.016 22l4.755-1.403A9.946 9.946 0 0012.004 22C17.528 22 22 17.524 22 12.004 22 6.48 17.528 2 12.004 2zm0 18.198a8.18 8.18 0 01-4.167-1.14l-.3-.178-3.1.812.827-3.016-.196-.31A8.174 8.174 0 013.802 12a8.202 8.202 0 0116.404 0 8.202 8.202 0 01-8.202 8.198z"/></svg>
+          WhatsApp
+        </a>
+      </div>`:'—')}
       ${fld('Email',c.email?`<a href="mailto:${c.email}" style="color:var(--accent2)">${c.email}</a>`:'—')}
       ${fld('Endereço',c.endereco)}
       <div style="margin-top:12px"><div class="section-title">Honorário</div>
@@ -2200,50 +2210,66 @@ function renderCertidoes() {
 // ============================================================
 // ALERTAS  (sem seção "em dia")
 // ============================================================
-function renderAlertas() {
-  refreshObrigStatus();
-  const allObrig = [
-    ...DB.obrigacoes,
-    ...DB.impostosCustom.map(i => ({...i, status:calcObrigStatus(i)}))
-  ];
-  const atrasadas = allObrig.filter(o => !o.entregue && o.status==='Atrasado');
-  const proximas = allObrig.filter(o => !o.entregue && o.status==='Próximo');
-  const inadim = DB.clientes.filter(c => {
-    if (c.status!=='Ativo') return false;
-    const mesRef = MESES[new Date().getMonth()]+'/'+new Date().getFullYear();
-    return !DB.pagamentos.find(p => p.clienteId===c.id&&p.ref===mesRef);
+function getImpostosVencendoEm(dias) {
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const mesAtual = hoje.getMonth(), anoAtual = hoje.getFullYear();
+  const result = [];
+  DB.impostosCustom.forEach(imposto => {
+    const cliente = DB.clientes.find(c => c.id === imposto.clienteId);
+    if (!cliente || cliente.status !== 'Ativo') return;
+    const jaEntregueEsteMes = imposto.entregue && imposto.dataEntrega && (() => {
+      const d = new Date(imposto.dataEntrega + 'T12:00');
+      return d.getMonth()===mesAtual && d.getFullYear()===anoAtual;
+    })();
+    if (jaEntregueEsteMes) return;
+    const dia = imposto.diaEmissao || 10;
+    const due = new Date(anoAtual, mesAtual, dia);
+    const diff = Math.floor((due - hoje) / 86400000);
+    if (diff === dias) result.push({ cliente, imposto, due });
   });
+  return result.sort((a,b) => a.cliente.nome.localeCompare(b.cliente.nome));
+}
 
-  const renderList = (items, toggleFn) => items.map(o => {
-    const c = DB.clientes.find(x => x.id===o.clienteId);
-    const isAt = o.status==='Atrasado';
-    const fn = o.tipo==='custom'||DB.impostosCustom.find(i=>i.id===o.id) ? `toggleImpostoCustom('${o.id}')` : `toggleObrigacao('${o.id}')`;
-    return `<div class="alert-item">
-      <div class="alert-dot" style="background:${isAt?'var(--red)':'var(--yellow)'}"></div>
-      <div class="alert-info"><div class="alert-title">${c?c.nome:'?'} — ${o.nome}</div><div class="alert-sub">Venc./Entrega: ${o.dataEntrega?new Date(o.dataEntrega+'T12:00').toLocaleDateString('pt-BR'):o.diaEmissao?'dia '+o.diaEmissao:o.dia?'dia '+o.dia:'—'} · ${o.status}</div></div>
-      <span class="badge ${isAt?'badge-red':'badge-yellow'}">${o.status}</span>
-      <button class="btn btn-success btn-sm" style="margin-left:6px" onclick="${fn}">✓ Entregar</button>
-    </div>`;
-  }).join('');
+function getHonorariosVencendoEm(dias) {
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const mesRef = MESES[hoje.getMonth()] + '/' + hoje.getFullYear();
+  const result = [];
+  DB.clientes.filter(c => c.status==='Ativo').forEach(c => {
+    const pago = DB.pagamentos.find(p => p.clienteId===c.id && p.ref===mesRef && p.forma !== 'Em Aberto');
+    if (pago) return;
+    const due = new Date(hoje.getFullYear(), hoje.getMonth(), c.vencimento);
+    const diff = Math.floor((due - hoje) / 86400000);
+    if (diff === dias) result.push({ c, due });
+  });
+  return result.sort((a,b) => a.c.nome.localeCompare(b.c.nome));
+}
+
+function renderAlertas() {
+  const impostosProx = getImpostosVencendoEm(1);
+  const honorProx = getHonorariosVencendoEm(3);
+  const total = impostosProx.length + honorProx.length;
 
   return `
   <div style="font-size:20px;font-weight:700;margin-bottom:6px">Central de Alertas</div>
   <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Pendências que precisam de atenção</div>
-  ${atrasadas.length+proximas.length+inadim.length===0 ? `<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Nenhuma pendência no momento!</div><div class="empty-sub">Tudo em dia.</div></div>` : ''}
-  ${atrasadas.length ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--red)">
-    <div class="card-header"><div class="card-title">🔴 Entrega Atrasada (${atrasadas.length})</div></div>
-    <div class="card-body" style="padding:8px">${renderList(atrasadas)}</div>
+  ${total===0 ? `<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Nenhuma pendência no momento!</div><div class="empty-sub">Tudo em dia.</div></div>` : ''}
+  ${impostosProx.length ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--yellow)">
+    <div class="card-header"><div class="card-title">⏰ Impostos vencendo amanhã (${impostosProx.length})</div></div>
+    <div class="card-body" style="padding:8px">${impostosProx.map(({cliente,imposto,due}) => `<div class="alert-item">
+      <div class="alert-dot" style="background:var(--yellow)"></div>
+      <div class="alert-info"><div class="alert-title">${cliente.nome} — ${imposto.nome}</div><div class="alert-sub">Vence amanhã, dia ${due.getDate()} · não deixe passar!</div></div>
+      <button class="btn btn-success btn-sm" onclick="toggleImpostoCustom('${imposto.id}')">✓ Entregar</button>
+    </div>`).join('')}</div>
   </div>` : ''}
-  ${proximas.length ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--yellow)">
-    <div class="card-header"><div class="card-title">🟡 Vencendo em breve (${proximas.length})</div></div>
-    <div class="card-body" style="padding:8px">${renderList(proximas)}</div>
-  </div>` : ''}
-  ${inadim.length ? `<div class="card" style="border-left:3px solid var(--orange)">
-    <div class="card-header"><div class="card-title">💸 Honorários em Aberto (${inadim.length})</div></div>
-    <div class="card-body" style="padding:8px">${inadim.map(c=>`<div class="alert-item">
+  ${honorProx.length ? `<div class="card" style="border-left:3px solid var(--orange)">
+    <div class="card-header"><div class="card-title">💰 Honorários vencendo em 3 dias (${honorProx.length})</div></div>
+    <div class="card-body" style="padding:8px">${honorProx.map(({c,due}) => `<div class="alert-item">
       <div class="alert-dot" style="background:var(--orange)"></div>
-      <div class="alert-info"><div class="alert-title">${c.nome}</div><div class="alert-sub">R$ ${c.honorario.toLocaleString('pt-BR',{minimumFractionDigits:2})}/mês · Venc. dia ${c.vencimento}</div></div>
-      <button class="btn btn-success btn-sm" onclick="openPagamento('${c.id}')">Registrar</button>
+      <div class="alert-info"><div class="alert-title">${c.nome}</div><div class="alert-sub">R$ ${c.honorario.toLocaleString('pt-BR',{minimumFractionDigits:2})} vence em 3 dias (dia ${due.getDate()}) · vale a pena avisar o cliente!</div></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-secondary btn-sm" onclick="cobrarHonorarioWhatsapp('${c.id}')">📲 Cobrar</button>
+        <button class="btn btn-success btn-sm" onclick="openPagamento('${c.id}')">✓ Pago</button>
+      </div>
     </div>`).join('')}</div>
   </div>` : ''}`;
 }
@@ -2741,6 +2767,7 @@ function openNovoCliente() {
   document.getElementById('modal-cliente-title').textContent = 'Cadastrar Cliente';
   ['f-nome','f-doc','f-responsavel','f-telefone','f-email','f-endereco','f-obs'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('f-tipo').value = '';
+  document.getElementById('f-atuacao').value = '';
   document.getElementById('f-status').value = 'Ativo';
   document.getElementById('f-honorario').value = '';
   document.getElementById('f-vencimento').value = '';
@@ -2775,6 +2802,7 @@ async function salvarCliente() {
   const obj = {
     nome, cpf_cnpj: doc, tipo,
     responsavel: document.getElementById('f-responsavel').value.trim(),
+    atuacao: document.getElementById('f-atuacao').value || null,
     telefone: document.getElementById('f-telefone').value.trim(),
     email: document.getElementById('f-email').value.trim(),
     endereco: document.getElementById('f-endereco').value.trim(),
@@ -2828,6 +2856,7 @@ function editarCliente(id) {
   document.getElementById('f-doc').value = c.doc || '';
   document.getElementById('f-tipo').value = c.tipo || '';
   document.getElementById('f-responsavel').value = c.responsavel || '';
+  document.getElementById('f-atuacao').value = c.atuacao || '';
   document.getElementById('f-telefone').value = c.telefone || '';
   document.getElementById('f-email').value = c.email || '';
   document.getElementById('f-endereco').value = c.endereco || '';
@@ -3460,11 +3489,7 @@ function updateBadges() {
     const pago = DB.pagamentos.find(p => p.clienteId===c.id && p.ref===mesRef && p.forma !== 'Em Aberto');
     return !pago && hoje.getDate() > c.vencimento;
   }).length;
-  const allObrig = [
-    ...DB.obrigacoes,
-    ...DB.impostosCustom.map(i => ({...i, status: calcObrigStatus(i)}))
-  ];
-  const nAlert = allObrig.filter(o => !o.entregue && o.status==='Atrasado').length;
+  const nAlert = getImpostosVencendoEm(1).length + getHonorariosVencendoEm(3).length;
   const bo = document.getElementById('badge-obrig');
   const ba = document.getElementById('badge-alertas');
   if (bo) { bo.textContent=nObrig; bo.style.display=nObrig>0?'':'none'; }
