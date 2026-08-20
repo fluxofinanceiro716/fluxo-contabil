@@ -840,7 +840,7 @@ let darkMode = true;
 // ============================================================
 async function loadDB() {
   try {
-    DB = {clientes:[],funcionarios:[],pagamentos:[],notas:[],obrigacoes:[],impostosCustom:[],obrigacoesAvulsas:[],clientesXml:[],xmlEnvios:[]};
+    DB = {clientes:[],funcionarios:[],pagamentos:[],notas:[],obrigacoes:[],impostosCustom:[],obrigacoesAvulsas:[],clientesXml:[],xmlEnvios:[],entregasImpostos:[]};
 
     const { data: clientes } = await window._supabase
       .from('clientes').select('*').order('nome', { ascending: true });
@@ -910,6 +910,11 @@ const { data: funcionarios } = await window._supabase
       .from('xml_envios').select('*');
     if (xmlEnvios) {
       DB.xmlEnvios = xmlEnvios.map(x => ({ id: x.id, clienteId: x.cliente_id, ref: x.ref, recebidoEm: x.recebido_em }));
+    }
+    const { data: entregasImpostos } = await window._supabase
+      .from('entregas_impostos').select('*');
+    if (entregasImpostos) {
+      DB.entregasImpostos = entregasImpostos.map(x => ({ id: x.id, clienteId: x.cliente_id, ref: x.ref, tipo: x.tipo, entregueEm: x.entregue_em }));
     }
 
     saveDB();
@@ -1175,7 +1180,7 @@ function goPage(page, navEl) {
   if (navEl) {
     navEl.classList.add('active');
   } else {
-    const map = {dashboard:0,clientes:1,obrigacoes:2,'cobranca-honorarios':2,'cobranca-xml':2,honorarios:3,'acesso-rapido':4,'emissao-nota':4,alertas:5,relatorios:6};
+    const map = {dashboard:0,clientes:1,obrigacoes:2,'cobranca-honorarios':2,'cobranca-xml':2,'entregar-impostos':2,honorarios:3,'acesso-rapido':4,'emissao-nota':4,alertas:5,relatorios:6};
     const btns = document.querySelectorAll('.nav-btn');
     if (btns[map[page]]) btns[map[page]].classList.add('active');
   }
@@ -1194,6 +1199,7 @@ async function renderPage(page) {
     case 'obrigacoes':      div.innerHTML = renderObrigacoes(); break;
     case 'cobranca-honorarios': div.innerHTML = renderCobrancaHonorarios(); break;
     case 'cobranca-xml':        div.innerHTML = renderCobrancaXml(); break;
+    case 'entregar-impostos':   div.innerHTML = renderEntregarImpostos(); break;
     case 'honorarios':      div.innerHTML = renderHonorarios(); break;
     case 'acesso-rapido':   div.innerHTML = renderAcessoRapido(); break;
     case 'emissao-nota':    div.innerHTML = renderEmissaoNota(); break;
@@ -1857,7 +1863,8 @@ function renderObrigacoes() {
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--text3);flex-shrink:0"><polyline points="9 18 15 12 9 6" stroke-width="2"/></svg>
     </div>
   </div>
-  ${renderCardCobrancaXml()}`;
+  ${renderCardCobrancaXml()}
+  ${renderCardEntregarImpostos()}`;
 }
 
 function calcXmlResumo() {
@@ -1869,6 +1876,182 @@ function calcXmlResumo() {
     return c ? { rowId: x.id, c, recebido } : null;
   }).filter(Boolean).sort((a,b) => a.c.nome.localeCompare(b.c.nome));
   return { mesRef, lista };
+}
+
+// ============================================================
+// ENTREGAR IMPOSTOS (MEI + ME/Simples Nacional)
+// ============================================================
+let xImpTab = 'mei';
+let xImpAno = new Date().getFullYear();
+let xImpMes = new Date().getMonth();
+const LINKS_ME = [
+  { nome: 'E-CAC', url: 'https://cav.receita.fazenda.gov.br/autenticacao/login' },
+  { nome: 'FGTS', url: 'https://fgtsdigital.sistema.gov.br/portal/login' }
+];
+const LINK_DAS_MEI = 'https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/pgmei.app/Identificacao';
+
+function calcImpostosResumo(ano, mes) {
+  const mesRef = MESES[mes] + '/' + ano;
+  const mei = DB.clientes.filter(c => c.status==='Ativo' && c.tipo==='MEI').sort((a,b)=>a.nome.localeCompare(b.nome));
+  const me = DB.clientes.filter(c => c.status==='Ativo' && c.tipo==='SN').sort((a,b)=>a.nome.localeCompare(b.nome));
+
+  const montar = (lista, tipo) => lista.map(c => {
+    const entrega = (DB.entregasImpostos||[]).find(e => e.clienteId===c.id && e.ref===mesRef && e.tipo===tipo);
+    return { c, entrega };
+  });
+
+  const meiTodos = montar(mei, 'mei');
+  const meTodos = montar(me, 'me');
+
+  return {
+    mesRef,
+    meiPendentes: meiTodos.filter(x => !x.entrega),
+    meiEntregues: meiTodos.filter(x => x.entrega),
+    mePendentes: meTodos.filter(x => !x.entrega),
+    meEntregues: meTodos.filter(x => x.entrega)
+  };
+}
+
+function renderCardEntregarImpostos() {
+  const hoje = new Date();
+  const { meiPendentes, mePendentes } = calcImpostosResumo(hoje.getFullYear(), hoje.getMonth());
+  const pendentes = meiPendentes.length + mePendentes.length;
+  return `
+  <div class="card" style="cursor:pointer;margin-top:14px" onclick="goPage('entregar-impostos', document.getElementById('nav-obrig'))">
+    <div class="card-body" style="display:flex;align-items:center;gap:14px;padding:16px">
+      <div style="width:42px;height:42px;border-radius:10px;background:var(--accent-glow);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🧾</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:15px">Entregar Impostos</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">${pendentes ? `${pendentes} cliente(s) com imposto pendente este mês` : 'Tudo entregue este mês'}</div>
+      </div>
+      ${pendentes ? `<span class="badge badge-yellow">${pendentes}</span>` : `<span class="badge badge-green">Em dia</span>`}
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--text3);flex-shrink:0"><polyline points="9 18 15 12 9 6" stroke-width="2"/></svg>
+    </div>
+  </div>`;
+}
+
+function selecionarMesImp(ano, mes) {
+  xImpAno = ano; xImpMes = mes; xImpTab = 'mei';
+  renderPage(currentPage);
+}
+
+function mudarAnoImp(delta) {
+  xImpAno += delta;
+  renderPage(currentPage);
+}
+
+function renderCalendarioImp() {
+  const hoje = new Date();
+  const meses = MESES.map((nome, i) => {
+    const sel = i===xImpMes;
+    const atual = i===hoje.getMonth() && xImpAno===hoje.getFullYear();
+    return `<button onclick="selecionarMesImp(${xImpAno},${i})"
+      style="padding:10px 4px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ${sel?'var(--accent)':'var(--border)'};background:${sel?'var(--accent-glow)':'var(--bg3)'};color:${sel?'var(--accent2)':'var(--text2)'};position:relative">
+      ${nome.slice(0,3)}${atual?`<span style="position:absolute;top:3px;right:5px;width:5px;height:5px;border-radius:50%;background:var(--green)"></span>`:''}
+    </button>`;
+  }).join('');
+  return `
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <button class="btn btn-secondary btn-sm btn-icon" onclick="mudarAnoImp(-1)">‹</button>
+    <div style="font-weight:700;font-size:15px">${xImpAno}</div>
+    <button class="btn btn-secondary btn-sm btn-icon" onclick="mudarAnoImp(1)">›</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:18px">${meses}</div>`;
+}
+
+function selecionarTabImp(tab) {
+  xImpTab = tab;
+  renderPage(currentPage);
+}
+
+async function marcarImpostoEntregue(clienteId, tipo) {
+  const { mesRef } = calcImpostosResumo(xImpAno, xImpMes);
+  const user = await window._supabase.auth.getUser();
+  const obj = { usuario_id: user.data.user.id, cliente_id: clienteId, ref: mesRef, tipo, entregue_em: new Date().toISOString().slice(0,10) };
+  const { data: saved, error } = await window._supabase.from('entregas_impostos').insert(obj).select().single();
+  if (error) { showToast('Erro ao confirmar: ' + error.message, 'error'); return; }
+  if (!DB.entregasImpostos) DB.entregasImpostos = [];
+  DB.entregasImpostos.push({ id: saved.id, clienteId, ref: mesRef, tipo, entregueEm: obj.entregue_em });
+  saveDB();
+  showToast('Imposto marcado como entregue!', 'success');
+  renderPage(currentPage);
+}
+
+function desfazerImpostoEntregue(entregaId) {
+  customConfirm('Marcar como pendente de novo?').then(async ok => {
+    if (!ok) return;
+    const { error } = await window._supabase.from('entregas_impostos').delete().eq('id', entregaId);
+    if (error) { showToast('Erro: ' + error.message, 'error'); return; }
+    DB.entregasImpostos = DB.entregasImpostos.filter(x => x.id!==entregaId);
+    saveDB();
+    renderPage(currentPage);
+  });
+}
+
+function impostosRegistradosLabel(clienteId) {
+  const alvo = ['simples nacional','gps','fgts'];
+  const nomes = DB.impostosCustom.filter(i => i.clienteId===clienteId && alvo.some(a => (i.nome||'').toLowerCase().includes(a))).map(i => i.nome);
+  return nomes.length ? nomes.join(', ') : null;
+}
+
+function renderEntregarImpostos() {
+  const { mesRef, meiPendentes, meiEntregues, mePendentes, meEntregues } = calcImpostosResumo(xImpAno, xImpMes);
+
+  const rowMei = ({c,entrega}) => `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div style="font-weight:600;font-size:14px;cursor:pointer" onclick="openClienteDetail('${c.id}','impostos')">${c.nome}</div>
+        ${entrega?`<div style="font-size:12px;color:var(--text3);margin-top:2px">Entregue em ${new Date(entrega.entregueEm+'T12:00').toLocaleDateString('pt-BR')}</div>`:''}
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;margin-left:auto">
+        ${entrega ? `<button class="btn btn-secondary btn-sm" onclick="desfazerImpostoEntregue('${entrega.id}')">↺ Pendente</button>` : `
+          <a class="btn btn-secondary btn-sm" href="${LINK_DAS_MEI}" target="_blank">Emitir DAS</a>
+          <button class="btn btn-success btn-sm" onclick="marcarImpostoEntregue('${c.id}','mei')">✓ Entregue</button>`}
+      </div>
+    </div>`;
+
+  const rowMe = ({c,entrega}) => {
+    const label = impostosRegistradosLabel(c.id);
+    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div style="font-weight:600;font-size:14px;cursor:pointer" onclick="openClienteDetail('${c.id}','impostos')">${c.nome}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">${label ? `Impostos: ${label}` : 'Nenhum imposto cadastrado neste cliente'}${entrega?` · Entregue em ${new Date(entrega.entregueEm+'T12:00').toLocaleDateString('pt-BR')}`:''}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;margin-left:auto">
+        ${entrega ? `<button class="btn btn-secondary btn-sm" onclick="desfazerImpostoEntregue('${entrega.id}')">↺ Pendente</button>` : `
+          <a class="btn btn-secondary btn-sm" href="${LINKS_ME[0].url}" target="_blank">${LINKS_ME[0].nome}</a>
+          <a class="btn btn-secondary btn-sm" href="${LINKS_ME[1].url}" target="_blank">${LINKS_ME[1].nome}</a>
+          <button class="btn btn-success btn-sm" onclick="marcarImpostoEntregue('${c.id}','me')">✓ Entregue</button>`}
+      </div>
+    </div>`;
+  };
+
+  const tabData = {
+    mei: { list: meiPendentes, row: rowMei, empty: 'Nenhum MEI pendente este mês' },
+    me: { list: mePendentes, row: rowMe, empty: 'Nenhuma ME pendente este mês' },
+    'entregues-mei': { list: meiEntregues, row: rowMei, empty: 'Nenhum MEI entregue ainda este mês' },
+    'entregues-me': { list: meEntregues, row: rowMe, empty: 'Nenhuma ME entregue ainda este mês' }
+  };
+  const atual = tabData[xImpTab];
+  const tabBtn = (key,label,count) => `<button onclick="selecionarTabImp('${key}')" class="tab-btn ${xImpTab===key?'active':''}" style="display:flex;align-items:center;justify-content:center;gap:6px">${label}${count?`<span class="badge badge-blue" style="padding:1px 7px">${count}</span>`:''}</button>`;
+
+  return `
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="btn btn-secondary btn-sm" onclick="goPage('obrigacoes', document.getElementById('nav-obrig'))">← Voltar</button>
+    <div style="font-size:18px;font-weight:700">🧾 Entregar Impostos</div>
+  </div>
+  ${renderCalendarioImp()}
+  <div style="font-size:13px;color:var(--text3);margin-bottom:12px">Referência: <strong>${mesRef}</strong></div>
+  <div class="tabs">
+    ${tabBtn('mei','Empresas MEI',meiPendentes.length)}
+    ${tabBtn('me','Empresas ME',mePendentes.length)}
+    ${tabBtn('entregues-mei','Entregues MEI',meiEntregues.length)}
+    ${tabBtn('entregues-me','Entregues ME',meEntregues.length)}
+  </div>
+  <div class="card">
+    <div class="card-body" style="padding:0">
+      ${atual.list.length ? atual.list.map(atual.row).join('') : `<div class="empty" style="padding:24px"><div class="empty-icon">🧾</div><div class="empty-text">${atual.empty}</div></div>`}
+    </div>
+  </div>`;
 }
 
 function renderCardCobrancaXml() {
