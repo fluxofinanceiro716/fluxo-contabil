@@ -1988,35 +1988,115 @@ function cobrarXmlWhatsapp(clienteId) {
   window.open(`https://wa.me/55${tel}?text=${msg}`, '_blank');
 }
 
-function renderCobrancaHonorarios() {
-  const { mesRef, linhas } = calcHonorariosResumo();
+let xHonorAno = new Date().getFullYear();
+let xHonorMes = new Date().getMonth();
+let xHonorTab = 'cobrar';
 
-  const row = ({c,pago,atrasado}) => {
-    const cls = pago?'badge-green':atrasado?'badge-red':'badge-yellow';
-    const st = pago?'Pago':atrasado?'Atrasado':'Pendente';
+function calcHonorariosResumoMes(ano, mes) {
+  const hoje = new Date();
+  const mesRef = MESES[mes] + '/' + ano;
+  const diaHoje = hoje.getDate();
+  const isPast = (ano < hoje.getFullYear()) || (ano === hoje.getFullYear() && mes < hoje.getMonth());
+  const isCurrent = ano === hoje.getFullYear() && mes === hoje.getMonth();
+
+  const ativos = DB.clientes.filter(c => c.status === 'Ativo').sort((a,b) => a.nome.localeCompare(b.nome));
+  const cobrar = [], pendentes = [], pagos = [];
+
+  ativos.forEach(c => {
+    const pago = DB.pagamentos.find(p => p.clienteId===c.id && p.ref===mesRef && p.forma !== 'Em Aberto');
+    if (pago) { pagos.push({ c, pago }); return; }
+    let vencido;
+    if (isPast) vencido = true;
+    else if (isCurrent) vencido = diaHoje > c.vencimento;
+    else vencido = false;
+    if (vencido) pendentes.push({ c }); else cobrar.push({ c });
+  });
+
+  return { mesRef, cobrar, pendentes, pagos };
+}
+
+function selecionarMesHonor(ano, mes) {
+  xHonorAno = ano; xHonorMes = mes; xHonorTab = 'cobrar';
+  renderPage(currentPage);
+}
+
+function mudarAnoHonor(delta) {
+  xHonorAno += delta;
+  renderPage(currentPage);
+}
+
+function selecionarTabHonor(tab) {
+  xHonorTab = tab;
+  renderPage(currentPage);
+}
+
+function renderCalendarioHonor() {
+  const hoje = new Date();
+  const meses = MESES.map((nome, i) => {
+    const sel = i===xHonorMes;
+    const atual = i===hoje.getMonth() && xHonorAno===hoje.getFullYear();
+    return `<button onclick="selecionarMesHonor(${xHonorAno},${i})"
+      style="padding:10px 4px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ${sel?'var(--accent)':'var(--border)'};background:${sel?'var(--accent-glow)':'var(--bg3)'};color:${sel?'var(--accent2)':'var(--text2)'};position:relative">
+      ${nome.slice(0,3)}${atual?`<span style="position:absolute;top:3px;right:5px;width:5px;height:5px;border-radius:50%;background:var(--green)"></span>`:''}
+    </button>`;
+  }).join('');
+  return `
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <button class="btn btn-secondary btn-sm btn-icon" onclick="mudarAnoHonor(-1)">‹</button>
+    <div style="font-weight:700;font-size:15px">${xHonorAno}</div>
+    <button class="btn btn-secondary btn-sm btn-icon" onclick="mudarAnoHonor(1)">›</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:18px">${meses}</div>`;
+}
+
+function renderCobrancaHonorarios() {
+  const { mesRef, cobrar, pendentes, pagos } = calcHonorariosResumoMes(xHonorAno, xHonorMes);
+
+  const rowCobrar = ({c}) => {
     const temTel = c.telefone && c.telefone.replace(/\D/g,'').length >= 10;
     return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
       <div style="flex:1;min-width:180px">
         <div style="font-weight:600;font-size:14px;cursor:pointer" onclick="openClienteDetail('${c.id}','honorarios')">${c.nome}</div>
         <div style="font-size:12px;color:var(--text3);margin-top:2px">R$ ${c.honorario.toLocaleString('pt-BR',{minimumFractionDigits:2})} · Venc. dia ${c.vencimento}</div>
       </div>
-      <span class="badge ${cls}">${st}</span>${pago?`<div style="font-size:11px;color:var(--text3)">Pago em ${new Date(pago.data+'T12:00').toLocaleDateString('pt-BR')}</div>`:''}
       <div style="display:flex;gap:6px;flex-shrink:0;margin-left:auto">
-        ${!pago ? `<button class="btn btn-secondary btn-sm" onclick="cobrarHonorarioWhatsapp('${c.id}')" ${temTel?'':'disabled title="Cliente sem telefone cadastrado"'}>📲 Cobrar</button>` : ''}
-        ${pago?`<button class="btn btn-secondary btn-sm" onclick="excluirPagamento('${pago.id}')">↺ Pendente</button>`:`<button class="btn btn-success btn-sm" onclick="openPagamento('${c.id}')">✓ Pago</button>`}
+        <button class="btn btn-secondary btn-sm" onclick="cobrarHonorarioWhatsapp('${c.id}')" ${temTel?'':'disabled title="Cliente sem telefone cadastrado"'}>📲 Cobrar</button>
+        <button class="btn btn-success btn-sm" onclick="openPagamento('${c.id}','${mesRef}')">✓ Pago</button>
       </div>
     </div>`;
   };
+
+  const rowPago = ({c,pago}) => `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div style="font-weight:600;font-size:14px;cursor:pointer" onclick="openClienteDetail('${c.id}','honorarios')">${c.nome}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">R$ ${(pago.valorLiquido||pago.valor).toLocaleString('pt-BR',{minimumFractionDigits:2})} · Pago em ${new Date(pago.data+'T12:00').toLocaleDateString('pt-BR')}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;margin-left:auto">
+        <button class="btn btn-secondary btn-sm" onclick="gerarRecibo('${pago.id}','${c.id}')">🧾 Recibo</button>
+        <button class="btn btn-secondary btn-sm" onclick="excluirPagamento('${pago.id}')">↺ Desfazer</button>
+      </div>
+    </div>`;
+
+  const tabData = { cobrar: {list:cobrar,row:rowCobrar,empty:'Nenhum cliente para cobrar neste mês'}, pendentes: {list:pendentes,row:rowCobrar,empty:'Nenhum cliente pendente neste mês'}, pagos: {list:pagos,row:rowPago,empty:'Nenhum pagamento confirmado neste mês'} };
+  const atual = tabData[xHonorTab];
+
+  const tabBtn = (key,label,count,color) => `<button onclick="selecionarTabHonor('${key}')" class="tab-btn ${xHonorTab===key?'active':''}" style="display:flex;align-items:center;justify-content:center;gap:6px">${label}${count?`<span class="badge ${color}" style="padding:1px 7px">${count}</span>`:''}</button>`;
 
   return `
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
     <button class="btn btn-secondary btn-sm" onclick="goPage('obrigacoes', document.getElementById('nav-obrig'))">← Voltar</button>
     <div style="font-size:18px;font-weight:700">💰 Cobrança de Honorários</div>
   </div>
-  <div style="font-size:13px;color:var(--text3);margin-bottom:16px">Referência: <strong>${mesRef}</strong> — clique em Cobrar para chamar o cliente no WhatsApp, ou em Pago pra confirmar direto</div>
+  ${renderCalendarioHonor()}
+  <div style="font-size:13px;color:var(--text3);margin-bottom:12px">Referência: <strong>${mesRef}</strong></div>
+  <div class="tabs">
+    ${tabBtn('cobrar','Cobrar',cobrar.length,'badge-blue')}
+    ${tabBtn('pendentes','Pendentes',pendentes.length,'badge-red')}
+    ${tabBtn('pagos','Pagos',pagos.length,'badge-green')}
+  </div>
   <div class="card">
     <div class="card-body" style="padding:0">
-      ${linhas.length ? linhas.map(row).join('') : '<div class="empty" style="padding:24px"><div class="empty-icon">👥</div><div class="empty-text">Nenhum cliente ativo</div></div>'}
+      ${atual.list.length ? atual.list.map(atual.row).join('') : `<div class="empty" style="padding:24px"><div class="empty-icon">👥</div><div class="empty-text">${atual.empty}</div></div>`}
     </div>
   </div>`;
 }
@@ -3166,10 +3246,10 @@ function atualizarRefPorData(dataStr) {
   document.getElementById('fp-ref').value = ref;
 }
 
-function openPagamento(clienteId) {
+function openPagamento(clienteId, refPreset) {
   const c = DB.clientes.find(x => x.id===clienteId);
   document.getElementById('fp-cliente-id').value = clienteId;
-  document.getElementById('fp-ref').value = MESES[new Date().getMonth()]+'/'+new Date().getFullYear();
+  document.getElementById('fp-ref').value = refPreset || (MESES[new Date().getMonth()]+'/'+new Date().getFullYear());
   document.getElementById('fp-valor').value = c ? c.honorario : '';
   document.getElementById('fp-liquido').value = c ? c.honorario : '';
   document.getElementById('fp-data').value = new Date().toISOString().slice(0,10);
@@ -3234,6 +3314,7 @@ async function salvarPagamento() {
   };
   const { data: saved, error } = await window._supabase.from('honorarios').insert(obj).select().single();
   if (error) { showToast('Erro ao salvar: ' + error.message, 'error'); return; }
+  const clienteIdSalvo = clienteId;
   DB.pagamentos.push({
     id: saved.id, clienteId: saved.cliente_id, ref: saved.referencia,
     valor: saved.valor, valorLiquido: saved.valor_liquido,
@@ -3245,6 +3326,7 @@ async function salvarPagamento() {
   closeModal('modal-pagto');
   showToast('Pagamento registrado!','success');
   renderPage(currentPage);
+  gerarRecibo(saved.id, clienteIdSalvo);
 }
 
 function excluirPagamento(id) {
